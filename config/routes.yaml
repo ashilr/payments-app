@@ -1,0 +1,4 @@
+# Route files are loaded automatically from config/routes/ by MicroKernelTrait.
+# See config/routes/api.yaml       — API controllers  (src/Controller/Api/)
+# See config/routes/security.yaml  — login / logout endpoints
+# See config/routes/framework.yaml — dev error pages

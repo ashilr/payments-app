@@ -1,0 +1,92 @@
+# =========================
+# Symfony / PHP
+# =========================
+/vendor/
+/var/
+/.env
+/.env.local
+/.env.*.local
+
+# Symfony cache, logs, sessions
+/var/cache/
+/var/log/
+/var/sessions/
+
+# PHPUnit
+/phpunit.xml
+/phpunit.xml.dist
+
+# Composer
+composer.phar
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+docker-compose.local.yml
+docker/*.log
+
+# =========================
+# Node (if used)
+# =========================
+/node_modules/
+/public/build/
+/npm-debug.log*
+/yarn-error.log*
+
+# =========================
+# IDE / Editor
+# =========================
+/.idea/
+/.vscode/
+/*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# =========================
+# Logs & temp files
+# =========================
+*.log
+*.tmp
+*.cache
+
+# =========================
+# Database / dumps
+# =========================
+*.sql
+*.sqlite
+*.db
+
+# =========================
+# Secrets & Keys
+# =========================
+/config/jwt/private.pem
+/config/jwt/public.pem
+/config/secrets/
+
+# =========================
+# Symfony secrets
+# =========================
+/.env.local.php
+
+# =========================
+# Build / Coverage
+# =========================
+/coverage/
+/build/
+
+# =========================
+# Misc
+# =========================
+*.bak
+*.backup
+*.old
+###> phpunit/phpunit ###
+/phpunit.xml
+/.phpunit.cache/
+###< phpunit/phpunit ###

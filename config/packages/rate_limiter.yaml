@@ -1,0 +1,32 @@
+framework:
+    rate_limiter:
+
+        # ── Transfer endpoint ──────────────────────────────────────────────────
+        # Sliding-window limiter keyed per client IP.
+        # Tune via environment variables — no code changes needed.
+        #
+        # RATE_LIMIT_TRANSFER_MAX_REQUESTS : max requests allowed in the window  (default 10)
+        # RATE_LIMIT_TRANSFER_INTERVAL     : window size as a date-string        (default "1 minute")
+        #
+        # Examples:
+        #   10 req / 1 minute  →  sustained ~0.17 req/s, burst up to 10
+        #   60 req / 1 hour    →  1 req/min average, burst up to 60
+        #
+        # The payment.cache Redis pool is used for state; entries expire automatically
+        # once the window slides past, so no manual cleanup is required.
+        transfer_api:
+            policy: sliding_window
+            limit: '%env(int:RATE_LIMIT_TRANSFER_MAX_REQUESTS)%'
+            interval: '%env(RATE_LIMIT_TRANSFER_INTERVAL)%'
+            cache_pool: payment.cache
+
+when@test:
+    framework:
+        rate_limiter:
+            transfer_api:
+                policy: sliding_window
+                # Effectively unlimited in tests so rate limiting never interferes
+                # with integration test assertions.
+                limit: 10000
+                interval: '1 minute'
+                cache_pool: payment.cache
