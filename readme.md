@@ -11,8 +11,7 @@
 ![Redis](https://img.shields.io/badge/Redis-latest-DC382D?logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-> ### AI-assisted development
-> This project was built with **AI assistance**, with clear separation of roles:
+> **AI-assisted development** — This project was built with **AI assistance**, with clear separation of roles:
 > - **Planning:** **Claude Opus** — architecture, trade-offs, task breakdown, and review strategy.
 > - **Implementation:** **Claude Sonnet 4.6** — code, refactors, tests, and documentation (primarily via **Cursor**).
 >
