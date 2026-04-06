@@ -2,7 +2,7 @@
 
 > A production-grade fintech payment system built with **Symfony 6.4** — featuring atomic fund transfers, double-entry bookkeeping, a priority-ordered rule engine, idempotency, pessimistic locking, compliance-oriented audit trails (entity-scoped queries + metadata masking), and a config-driven rate limiter.
 
-**Install and run:** see [Quick start — install & run](#quick-start--install--run) (`composer install`, `php bin/console …`, Docker optional).
+**Install, run, and test:** [Quick start — install & run](#quick-start--install--run) · [Setup & Running](#setup--running) · [Running the Test Suite](#running-the-test-suite) (`composer install`, `php bin/console …`, Docker optional).
 
 ![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?logo=php&logoColor=white)
 ![Symfony](https://img.shields.io/badge/Symfony-6.4-000000?logo=symfony&logoColor=white)
@@ -11,27 +11,21 @@
 ![Redis](https://img.shields.io/badge/Redis-latest-DC382D?logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-> **AI-assisted development** — This project was built with **AI assistance**, with clear separation of roles:
-> - **Planning:** **Claude Opus** — architecture, trade-offs, task breakdown, and review strategy.
-> - **Implementation:** **Claude Sonnet 4.6** — code, refactors, tests, and documentation (primarily via **Cursor**).
->
-> See **[AI-assisted development](#ai-assisted-development)** below and **[`docs/AI_ASSISTANCE.md`](docs/AI_ASSISTANCE.md)** for tooling detail, prompts, and ownership expectations.
-
 ---
 
 ## Table of Contents
 
-- [Tech Stack](#tech-stack)
-- [AI-assisted development](#ai-assisted-development)
 - [Quick start — install & run](#quick-start--install--run)
+- [Setup & Running](#setup--running)
+- [Running the Test Suite](#running-the-test-suite)
+- [Contributing](#contributing)
+- [AI-assisted development](#ai-assisted-development)
+- [Tech Stack](#tech-stack)
 - [Architecture Overview](#architecture-overview)
 - [Project Structure](#project-structure)
 - [Database Schema](#database-schema)
 - [Features](#features)
 - [API Reference](#api-reference)
-- [Setup & Running](#setup--running)
-- [Running the Test Suite](#running-the-test-suite)
-- [Contributing](#contributing)
 - [Seeded Test Data](#seeded-test-data)
 - [Transfer Flow (Step by Step)](#transfer-flow-step-by-step)
 - [Rule Engine](#rule-engine)
@@ -39,22 +33,6 @@
 - [Rate Limiting](#rate-limiting)
 - [High Load & Scalability Considerations](#high-load--scalability-considerations)
 - [What Is Missing / Future Scope](#what-is-missing--future-scope)
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Language | PHP 8.3 |
-| Framework | Symfony 6.4 |
-| ORM | Doctrine ORM 3.x |
-| Database | MySQL 8.0 |
-| Cache / Sessions / Rate Limiting | Redis (`symfony/rate-limiter` + `symfony/lock`) |
-| Serialization | `symfony/serializer` + `symfony/property-access` |
-| Web Server | Nginx + PHP-FPM |
-| Containerisation | Docker / Docker Compose |
-| Testing | PHPUnit 12 · `symfony/test-pack` · `symfony/browser-kit` |
 
 ---
 
@@ -95,7 +73,171 @@ php bin/console doctrine:schema:validate
 curl -s http://localhost:8080/api/v1/transfer/audit-logs | head -c 200
 ```
 
-Full reset, test commands, and troubleshooting: [Setup & Running](#setup--running) and [Running the Test Suite](#running-the-test-suite).
+Docker setup, database reset, and **PHPUnit** commands are documented in **[Setup & Running](#setup--running)** and **[Running the Test Suite](#running-the-test-suite)** next.
+
+---
+
+## Setup & Running
+
+### Prerequisites
+- Docker Desktop
+
+### 1. Clone and configure
+```bash
+git clone <repo-url>
+cd payments-app
+cp .env.example .env        # then adjust DATABASE_URL, APP_SECRET, etc.
+```
+
+### 2. Build and start containers
+```bash
+docker compose up -d --build
+```
+
+Services started:
+
+| Service | Address |
+|---|---|
+| `nginx` | [http://localhost:8080](http://localhost:8080) |
+| `php` | PHP-FPM 8.3 (internal) |
+| `db` | MySQL 8.0 on port `3306` |
+| `redis` | Redis on port `6379` |
+
+### 3. Install dependencies
+```bash
+docker compose exec php composer install
+```
+
+### 4. Run migrations
+The schema is defined in a **single** migration file (`migrations/Version20260325000001.php`) — run once on a fresh database:
+
+```bash
+docker compose exec php php bin/console doctrine:migrations:migrate --no-interaction
+```
+
+Optional — confirm the database matches entity mappings (should print **\[OK\] The database schema is in sync**):
+
+```bash
+docker compose exec php php bin/console doctrine:schema:validate
+```
+
+### 5. Seed the database
+```bash
+docker compose exec php php bin/console doctrine:fixtures:load --no-interaction
+```
+
+### Full reset (drop → migrate → seed)
+```bash
+docker compose exec php sh -c "
+  php bin/console doctrine:schema:drop --force --full-database &&
+  php bin/console doctrine:migrations:migrate --no-interaction &&
+  php bin/console doctrine:fixtures:load --no-interaction
+"
+```
+
+---
+
+## Running the Test Suite
+
+The project has two independent test suites — both run with the same `phpunit` command since `phpunit.dist.xml` picks up the entire `tests/` directory recursively.
+
+```
+tests/
+├── Api/    → Integration tests  (boots full Symfony kernel + MySQL)
+└── Unit/   → Unit tests         (no kernel, no database, pure PHP)
+```
+
+### Prerequisites
+- Docker containers running (`docker compose up -d`)
+- Test database created (one-time only):
+
+```bash
+docker compose exec php php bin/console doctrine:database:create --env=test --if-not-exists
+```
+
+The schema is recreated automatically by `setUpBeforeClass()` on the first run.
+
+### Run the full test suite
+```bash
+docker compose exec php php vendor/bin/phpunit
+```
+
+If you add a new controller or route and tests return **404** for a valid URL, clear the test cache once: `rm -rf var/cache/test` (or `bin/console cache:clear --env=test`).
+
+### Run a specific suite
+```bash
+# Integration tests only
+docker compose exec php php vendor/bin/phpunit tests/Api
+
+# Unit tests only (no DB required)
+docker compose exec php php vendor/bin/phpunit tests/Unit
+```
+
+### Useful flags
+```bash
+# Readable test names with pass/fail per method
+docker compose exec php php vendor/bin/phpunit --testdox
+
+# Run a single test method
+docker compose exec php php vendor/bin/phpunit --filter testSuccessfulTransfer
+
+# Run with timing information
+docker compose exec php php vendor/bin/phpunit --testdox --order-by=duration
+```
+
+### Test isolation
+| Concern | How it is handled |
+|---|---|
+| Database state | `setUp()` truncates all tables with `FOREIGN_KEY_CHECKS=0` before each test |
+| Test database | Doctrine `dbname_suffix: _test` keeps it separate from the dev DB |
+| Redis / rate limiter | `payment.cache` uses in-memory array adapter in test env |
+| Account fixtures | Deterministic `account_number` constants (`ACC_ALICE`, etc.); integration tests resolve `accounts.id` (UUID) from the DB for `from_account_id` / `to_account_id` |
+
+---
+
+## Contributing
+
+- **`CONTRIBUTING.md`** — how to run tests locally, coding expectations, and pointers to load/scalability documentation.
+- **`.env.example`** — copy to `.env` for local setup.
+
+For production-style behaviour under load (Redis-backed rate limiting, pessimistic DB locks, idempotency, horizontal scaling), see [High Load & Scalability Considerations](#high-load--scalability-considerations) and [Rate Limiting](#rate-limiting).
+
+---
+
+> **AI-assisted development** — This project was built with **AI assistance**, with clear separation of roles:
+> - **Planning:** **Claude Opus** — architecture, trade-offs, task breakdown, and review strategy.
+> - **Implementation:** **Claude Sonnet 4.6** — code, refactors, tests, and documentation (primarily via **Cursor**).
+>
+> See **[`docs/AI_ASSISTANCE.md`](docs/AI_ASSISTANCE.md)** for tooling detail, prompts, and ownership expectations.
+
+## AI-assisted development
+
+Development used **Anthropic** models in two roles (via **Cursor** and the Claude apps/API):
+
+| Phase | Model | Focus |
+|--------|--------|--------|
+| **Planning** | **Claude Opus** | System design, API shape, rule-engine ordering, test strategy, documentation outline, risk review |
+| **Implementation** | **Claude Sonnet 4.6** | Symfony/Doctrine code, migrations, PHPUnit tests, refactors, `readme.md` / `CONTRIBUTING.md` / `.env.example` |
+
+**Cursor** was the main IDE for applying edits, running Dockerized PHPUnit, and iterating on diffs.
+
+Further detail — **prompts you can reuse**, ownership notes, and a fuller tool list: **[`docs/AI_ASSISTANCE.md`](docs/AI_ASSISTANCE.md)**.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Language | PHP 8.3 |
+| Framework | Symfony 6.4 |
+| ORM | Doctrine ORM 3.x |
+| Database | MySQL 8.0 |
+| Cache / Sessions / Rate Limiting | Redis (`symfony/rate-limiter` + `symfony/lock`) |
+| Serialization | `symfony/serializer` + `symfony/property-access` |
+| Web Server | Nginx + PHP-FPM |
+| Containerisation | Docker / Docker Compose |
+| Testing | PHPUnit 12 · `symfony/test-pack` · `symfony/browser-kit` |
 
 ---
 
@@ -930,144 +1072,6 @@ curl -X POST http://localhost:8080/api/v1/reversal/019612ab-c3d4-7e5f-a6b7-c8d9e
   "message": "This transaction has already been reversed."
 }
 ```
-
----
-
-## Setup & Running
-
-### Prerequisites
-- Docker Desktop
-
-### 1. Clone and configure
-```bash
-git clone <repo-url>
-cd payments-app
-cp .env.example .env        # then adjust DATABASE_URL, APP_SECRET, etc.
-```
-
-### 2. Build and start containers
-```bash
-docker compose up -d --build
-```
-
-Services started:
-
-| Service | Address |
-|---|---|
-| `nginx` | [http://localhost:8080](http://localhost:8080) |
-| `php` | PHP-FPM 8.3 (internal) |
-| `db` | MySQL 8.0 on port `3306` |
-| `redis` | Redis on port `6379` |
-
-### 3. Install dependencies
-```bash
-docker compose exec php composer install
-```
-
-### 4. Run migrations
-The schema is defined in a **single** migration file (`migrations/Version20260325000001.php`) — run once on a fresh database:
-
-```bash
-docker compose exec php php bin/console doctrine:migrations:migrate --no-interaction
-```
-
-Optional — confirm the database matches entity mappings (should print **\[OK\] The database schema is in sync**):
-
-```bash
-docker compose exec php php bin/console doctrine:schema:validate
-```
-
-### 5. Seed the database
-```bash
-docker compose exec php php bin/console doctrine:fixtures:load --no-interaction
-```
-
-### Full reset (drop → migrate → seed)
-```bash
-docker compose exec php sh -c "
-  php bin/console doctrine:schema:drop --force --full-database &&
-  php bin/console doctrine:migrations:migrate --no-interaction &&
-  php bin/console doctrine:fixtures:load --no-interaction
-"
-```
-
----
-
-## Running the Test Suite
-
-The project has two independent test suites — both run with the same `phpunit` command since `phpunit.dist.xml` picks up the entire `tests/` directory recursively.
-
-```
-tests/
-├── Api/    → Integration tests  (boots full Symfony kernel + MySQL)
-└── Unit/   → Unit tests         (no kernel, no database, pure PHP)
-```
-
-### Prerequisites
-- Docker containers running (`docker compose up -d`)
-- Test database created (one-time only):
-
-```bash
-docker compose exec php php bin/console doctrine:database:create --env=test --if-not-exists
-```
-
-The schema is recreated automatically by `setUpBeforeClass()` on the first run.
-
-### Run the full test suite
-```bash
-docker compose exec php php vendor/bin/phpunit
-```
-
-If you add a new controller or route and tests return **404** for a valid URL, clear the test cache once: `rm -rf var/cache/test` (or `bin/console cache:clear --env=test`).
-
-### Run a specific suite
-```bash
-# Integration tests only
-docker compose exec php php vendor/bin/phpunit tests/Api
-
-# Unit tests only (no DB required)
-docker compose exec php php vendor/bin/phpunit tests/Unit
-```
-
-### Useful flags
-```bash
-# Readable test names with pass/fail per method
-docker compose exec php php vendor/bin/phpunit --testdox
-
-# Run a single test method
-docker compose exec php php vendor/bin/phpunit --filter testSuccessfulTransfer
-
-# Run with timing information
-docker compose exec php php vendor/bin/phpunit --testdox --order-by=duration
-```
-
-### Test isolation
-| Concern | How it is handled |
-|---|---|
-| Database state | `setUp()` truncates all tables with `FOREIGN_KEY_CHECKS=0` before each test |
-| Test database | Doctrine `dbname_suffix: _test` keeps it separate from the dev DB |
-| Redis / rate limiter | `payment.cache` uses in-memory array adapter in test env |
-| Account fixtures | Deterministic `account_number` constants (`ACC_ALICE`, etc.); integration tests resolve `accounts.id` (UUID) from the DB for `from_account_id` / `to_account_id` |
-
-## Contributing
-
-- **`CONTRIBUTING.md`** — how to run tests locally, coding expectations, and pointers to load/scalability documentation.
-- **`.env.example`** — copy to `.env` for local setup.
-
-For production-style behaviour under load (Redis-backed rate limiting, pessimistic DB locks, idempotency, horizontal scaling), see [High Load & Scalability Considerations](#high-load--scalability-considerations) and [Rate Limiting](#rate-limiting).
-
-## AI-assisted development
-
-Development used **Anthropic** models in two roles (via **Cursor** and the Claude apps/API):
-
-| Phase | Model | Focus |
-|--------|--------|--------|
-| **Planning** | **Claude Opus** | System design, API shape, rule-engine ordering, test strategy, documentation outline, risk review |
-| **Implementation** | **Claude Sonnet 4.6** | Symfony/Doctrine code, migrations, PHPUnit tests, refactors, `readme.md` / `CONTRIBUTING.md` / `.env.example` |
-
-**Cursor** was the main IDE for applying edits, running Dockerized PHPUnit, and iterating on diffs.
-
-Further detail — **prompts you can reuse**, ownership notes, and a fuller tool list: **[`docs/AI_ASSISTANCE.md`](docs/AI_ASSISTANCE.md)**.
 
 ---
 
